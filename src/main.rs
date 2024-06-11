@@ -214,7 +214,7 @@ fn move_player_paddle(
     let (paddle, mut transform) = query.single_mut();
 
     if keyboard_input.pressed(KeyCode::ArrowDown) {
-        if transform.translation.y <= -MAX_HEIGHT + WALL_THICKNESS {
+        if transform.translation.y <= -MAX_HEIGHT + (WALL_THICKNESS * 2.) {
             transform.translation.y -= 0.;
         } else {
             transform.translation.y -= paddle.velocity;
@@ -222,7 +222,7 @@ fn move_player_paddle(
     }
 
     if keyboard_input.pressed(KeyCode::ArrowUp) {
-        if transform.translation.y >= MAX_HEIGHT - WALL_THICKNESS {
+        if transform.translation.y >= MAX_HEIGHT - (WALL_THICKNESS * 2.) {
             transform.translation.y += 0.;
         } else {
             transform.translation.y += paddle.velocity;
@@ -237,25 +237,15 @@ fn move_enemy_paddle(
     let (paddle, mut transform) = paddle_query.single_mut();
     let (_ball, ball_transform) = ball_query.single();
 
-    if ball_transform.translation.y == transform.translation.y {
+    if transform.translation.y <= -MAX_HEIGHT + (WALL_THICKNESS * 2.) {
         transform.translation.y -= 0.;
     }
-
-    if ball_transform.translation.y < transform.translation.y {
-        if transform.translation.y <= -MAX_HEIGHT + WALL_THICKNESS {
-            transform.translation.y -= 0.;
-        } else {
-            transform.translation.y -= paddle.velocity;
-        }
+    if transform.translation.y >= MAX_HEIGHT - (WALL_THICKNESS * 2.) {
+        transform.translation.y += 0.;
     }
 
-    if ball_transform.translation.y > transform.translation.y {
-        if transform.translation.y >= MAX_HEIGHT - WALL_THICKNESS {
-            transform.translation.y += 0.;
-        } else {
-            transform.translation.y += paddle.velocity;
-        }
-    }
+    let ball_to_paddle = ball_transform.translation.truncate() - transform.translation.truncate();
+    transform.translation.y += ball_to_paddle.y.signum() * paddle.velocity;
 }
 
 fn handle_collision(
@@ -278,14 +268,8 @@ fn handle_collision(
             let mut reflect_y = false;
 
             match collision {
-                Collision::Right | Collision::Left => {
-                    println!("collided: {:?}", collision);
-                    reflect_x = true
-                }
-                Collision::Top | Collision::Bottom => {
-                    println!("collided: {:?}", collision);
-                    reflect_y = true
-                }
+                Collision::Right | Collision::Left => reflect_x = true,
+                Collision::Top | Collision::Bottom => reflect_y = true,
             }
 
             if paddle.is_some() {
@@ -330,12 +314,12 @@ enum Collision {
     Bottom,
 }
 
-fn collide_with_side(ball: BoundingCircle, wall: Aabb2d) -> Option<Collision> {
-    if !ball.intersects(&wall) {
+fn collide_with_side(ball: BoundingCircle, collider: Aabb2d) -> Option<Collision> {
+    if !ball.intersects(&collider) {
         return None;
     }
 
-    let closest_point = wall.closest_point(ball.center());
+    let closest_point = collider.closest_point(ball.center());
     let offset = ball.center() - closest_point;
 
     let side = if offset.x.abs() >= offset.y.abs() {
